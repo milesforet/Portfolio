@@ -80,7 +80,7 @@ try{
     }
 
 
-    [hashtable]$bigMoneyMoves = @{}
+    [hashtable]$offboardData = @{}
 
     # LOOP THROUGH TICKETS, GET SERVICE ITEM INFO, TRIGGER DIALPAD LOG EXPORT
     # IF SUCCESSFUL, ADD TAG AND ADD LINKS FOR GETTING DIALPAD OFFBOARD LOGS
@@ -202,15 +202,6 @@ try{
                 }
             }
 
-<#             $statsBody = @{
-                "export_type" = "records"
-                "days_ago_start" = $offboardDaysAgo
-                "days_ago_end" = $addedToDpDaysAgo
-                "target_type" = "user"
-                "target_id" = $dialpadUser.id
-                "timezone" = "UTC" ################### WE NEED TO LOOK AT THIS??????? POTENTIALLY USE THE USERS TIMEZONE?
-            } #>
-
             # ALL THE STATS WE'RE PULLING
             $statsToPull = @("calls", "recordings", "texts", "voicemails")
             $dialStatsUrl = "https://dialpad.com/api/v2/stats"
@@ -243,7 +234,7 @@ try{
                 
             }
 
-            $bigMoneyMoves[[string]$ticket.id] = @{
+            $offboardData[[string]$ticket.id] = @{
                 "UploadFolder" = ($requestInfo.custom_fields.voip_log_link -split "Offboard%20Logs/")[1]
                 "Logs" = $allStats
                 "User" = "$name - $email"
@@ -263,19 +254,19 @@ try{
     Write-Output "================================================ NOW WE GET THE LOGS AND UPLOAD THEM ================================================"
 
     # NEED TO LOOP THROUGH THE HASH TO CHECK IF ALL THE DATA IS AVAILABLE
-    foreach($ticket in $bigMoneyMoves.Keys){
+    foreach($ticket in $offboardData.Keys){
         try{
             Write-Output "`n`n############# $ticket #############"
-            Write-Output $bigMoneyMoves[$ticket]["User"]
+            Write-Output $offboardData[$ticket]["User"]
 
             # LOOP THROUGH OUR HASH THAT HAS ALL THE DATA ON OFFBOARD TICKETS WE NEED
-            foreach($statType in $bigMoneyMoves[$ticket]["Logs"].Keys){
+            foreach($statType in $offboardData[$ticket]["Logs"].Keys){
                 Write-Output "`n----- $statType -----"
 
                 [System.Collections.ArrayList]$currentFile = @()
                 $capturedHeader = $null
 
-                foreach($record in $bigMoneyMoves[$ticket]["Logs"][$statType]){
+                foreach($record in $offboardData[$ticket]["Logs"][$statType]){
                     Write-Output "URL: $("https://dialpad.com/api/v2/stats/$record")"
 
                     $waiting = $true
@@ -341,7 +332,7 @@ try{
 
                 # ADD FILE TO SHAREPOINT
 
-                $uploadFolder = $bigMoneyMoves[$ticket]["UploadFolder"]
+                $uploadFolder = $offboardData[$ticket]["UploadFolder"]
 
                 if ($currentFile.Count -gt 0) {
                     $csvRawText = $currentFile | ConvertTo-Csv -NoTypeInformation | Out-String
@@ -356,7 +347,7 @@ try{
                 $bytes = [System.Text.Encoding]::UTF8.GetBytes($csvRawText)
                 $uploadStream = New-Object System.IO.MemoryStream(,$bytes)
 
-                $i = Add-PnpFile -Stream $uploadStream -Folder "Shared Documents/Offboard Logs/$uploadFolder" -FileName "$ticket-$($bigMoneyMoves[$ticket]["Username"])-$statType.csv"
+                $i = Add-PnpFile -Stream $uploadStream -Folder "Shared Documents/Offboard Logs/$uploadFolder" -FileName "$ticket-$($offboardData[$ticket]["Username"])-$statType.csv"
                 Write-Output "File Uploaded!"
 
 
@@ -364,7 +355,7 @@ try{
 
             Write-Output "`n"
 
-            $newTags = ($bigMoneyMoves[$ticket]["Tags"] + "voip_logs_done") -ne "need_voip_logs"
+            $newTags = ($offboardData[$ticket]["Tags"] + "voip_logs_done") -ne "need_voip_logs"
 
             $addTagBody = @{
                     "tags" = $newTags
